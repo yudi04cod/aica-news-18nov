@@ -1,7 +1,8 @@
-"""Draw the 18 November 2026 front page for make.fun news-image-20261118.
+"""Render the 18 November 2026 front page (news-image-20261118).
 
-Flat vector-style newspaper front page, drawn programmatically with PIL.
-Run:  python3 draw.py        # writes entry.png (1024x1024) next to this file
+A one-page newspaper drawn with PIL: masthead, six story panels and a
+briefs column, all vector shapes and text so everything stays sharp.
+Run `python3 draw.py` to regenerate entry.png beside this file.
 """
 
 import os
@@ -9,361 +10,334 @@ import random
 
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1024, 1024
-MARGIN = 24
-CONTENT_W = W - 2 * MARGIN
+SIZE = 1024
+PAD = 24
+INNER = SIZE - 2 * PAD
 
-SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
-SERIF_REG = "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"
-SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-SANS_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_DIR = "/usr/share/fonts/truetype/dejavu"
+SERIF_B = os.path.join(FONT_DIR, "DejaVuSerif-Bold.ttf")
+SERIF_R = os.path.join(FONT_DIR, "DejaVuSerif.ttf")
+SANS_R = os.path.join(FONT_DIR, "DejaVuSans.ttf")
+SANS_B = os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")
+
+INK = (20, 20, 20)
+GREY = (40, 40, 40)
+RED = (178, 34, 34)
+NAVY = (20, 33, 61)
+GOLD = (200, 162, 60)
+PAPER = (250, 246, 236)
 
 
-def font(path, size):
-    return ImageFont.truetype(path, size)
+def tf(path, px):
+    return ImageFont.truetype(path, px)
 
 
-def wrap(draw, text, fnt, max_w):
-    words = text.split()
-    lines, cur = [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if draw.textlength(trial, font=fnt) <= max_w:
-            cur = trial
+def split_lines(d, s, f, width):
+    out = []
+    current = ""
+    for word in s.split():
+        candidate = word if not current else current + " " + word
+        if d.textlength(candidate, font=f) <= width:
+            current = candidate
         else:
-            if cur:
-                lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
-    return lines
+            out.append(current)
+            current = word
+    if current:
+        out.append(current)
+    return out
 
 
-def text_block(draw, xy, lines, fnt, fill, leading=None):
-    x, y = xy
-    leading = leading or int(fnt.size * 1.28)
-    for line in lines:
-        draw.text((x, y), line, font=fnt, fill=fill)
-        y += leading
+def draw_lines(d, x, y, rows, f, colour, gap):
+    for row in rows:
+        d.text((x, y), row, font=f, fill=colour)
+        y += gap
     return y
 
 
-def kicker(draw, x, y, label, color=(178, 34, 34)):
-    f = font(SANS_BOLD, 15)
-    draw.text((x, y), label, font=f, fill=color)
+def tag(d, x, y, s):
+    f = tf(SANS_B, 15)
+    d.text((x, y), s, font=f, fill=RED)
     return y + 21
 
 
-def headline(draw, x, y, text, size, max_w, color=(20, 20, 20)):
-    f = font(SERIF, size)
-    lines = wrap(draw, text, f, max_w)
-    return text_block(draw, (x, y), lines, f, color, leading=int(size * 1.08))
+def head(d, x, y, s, px, width):
+    f = tf(SERIF_B, px)
+    rows = split_lines(d, s, f, width)
+    return draw_lines(d, x, y, rows, f, INK, int(px * 1.08))
 
 
-def body(draw, x, y, text, size, max_w, color=(40, 40, 40)):
-    f = font(SANS, size)
-    lines = wrap(draw, text, f, max_w)
-    return text_block(draw, (x, y), lines, f, color, leading=int(size * 1.35))
+def para(d, x, y, s, px, width):
+    f = tf(SANS_R, px)
+    rows = split_lines(d, s, f, width)
+    return draw_lines(d, x, y, rows, f, GREY, int(px * 1.35))
 
 
-def panel(draw, x, y, w, h, border=(30, 30, 30)):
-    draw.rectangle([x, y, x + w - 1, y + h - 1], fill=(255, 255, 255),
-                   outline=border, width=2)
-    draw.line([x + 2, y + 2, x + w - 3, y + 2], fill=(178, 34, 34), width=3)
-    return x + 16, y + 12
+def frame(d, x, y, w, h):
+    d.rectangle([x, y, x + w - 1, y + h - 1], fill=(255, 255, 255),
+                outline=(30, 30, 30), width=2)
+    d.line([(x + 2, y + 2), (x + w - 3, y + 2)], fill=RED, width=3)
 
 
-# ---------------------------------------------------------------- scenes
-def scene_shenzhen(draw, x, y, w, h):
-    """Three flags above a Shenzhen skyline, dusk sky."""
-    draw.rectangle([x, y, x + w, y + h], fill=(232, 226, 214))
-    # dusk band
-    draw.rectangle([x, y, x + w, y + 34], fill=(24, 44, 78))
-    # three flags: US, China, Russia
-    fw, fh = 58, 32
-    gap = (w - 3 * fw) // 4
-    for i, kind in enumerate(["us", "cn", "ru"]):
-        fx = x + gap + i * (fw + gap)
+# ---------------------------------------------------------------- artwork
+def art_summit(d, x, y, w, h):
+    """Dusk sky, three flags, Shenzhen towers."""
+    d.rectangle([x, y, x + w, y + h], fill=(232, 226, 214))
+    d.rectangle([x, y, x + w, y + 34], fill=NAVY)
+    flag_w, flag_h = 58, 32
+    step = (w - 3 * flag_w) // 4
+    kinds = ("us", "cn", "ru")
+    for idx, kind in enumerate(kinds):
+        fx = x + step + idx * (flag_w + step)
         fy = y + 46
-        draw.line([(fx, fy), (fx, fy + fh + 10)], fill=(40, 40, 40), width=3)
+        d.line([(fx, fy), (fx, fy + flag_h + 10)], fill=(40, 40, 40), width=3)
         if kind == "us":
-            for s in range(6):
-                col = (178, 34, 34) if s % 2 == 0 else (255, 255, 255)
-                draw.rectangle([fx + 3, fy + s * 5, fx + 3 + fw,
-                                fy + (s + 1) * 5], fill=col)
-            draw.rectangle([fx + 3, fy, fx + 23, fy + 15],
-                           fill=(30, 60, 120))
+            for stripe in range(6):
+                c = RED if stripe % 2 == 0 else (255, 255, 255)
+                d.rectangle([fx + 3, fy + stripe * 5, fx + 3 + flag_w,
+                             fy + (stripe + 1) * 5], fill=c)
+            d.rectangle([fx + 3, fy, fx + 23, fy + 15], fill=(30, 60, 120))
         elif kind == "cn":
-            draw.rectangle([fx + 3, fy, fx + 3 + fw, fy + fh],
-                           fill=(222, 41, 16), outline=(40, 40, 40), width=1)
-            draw.ellipse([fx + 10, fy + 7, fx + 24, fy + 21],
-                         fill=(255, 214, 90))
+            d.rectangle([fx + 3, fy, fx + 3 + flag_w, fy + flag_h],
+                        fill=(222, 41, 16), outline=(40, 40, 40), width=1)
+            d.ellipse([fx + 10, fy + 7, fx + 24, fy + 21], fill=(255, 214, 90))
         else:
-            for s, col in enumerate([(255, 255, 255), (30, 60, 160),
-                                     (178, 34, 34)]):
-                draw.rectangle([fx + 3, fy + s * 11, fx + 3 + fw,
-                                fy + (s + 1) * 11], fill=col)
-            draw.rectangle([fx + 3, fy, fx + 3 + fw, fy + fh],
-                           outline=(40, 40, 40), width=1)
-    # skyline of towers along the bottom
-    base = y + h
-    fracs = [0.40, 0.56, 0.34, 0.62, 0.44, 0.58, 0.36]
+            bands = [(255, 255, 255), (30, 60, 160), RED]
+            for stripe, c in enumerate(bands):
+                d.rectangle([fx + 3, fy + stripe * 11, fx + 3 + flag_w,
+                             fy + (stripe + 1) * 11], fill=c)
+            d.rectangle([fx + 3, fy, fx + 3 + flag_w, fy + flag_h],
+                        outline=(40, 40, 40), width=1)
+    bottom = y + h
+    heights = [0.40, 0.56, 0.34, 0.62, 0.44, 0.58, 0.36]
     tw = w // 7
-    for i, fr in enumerate(fracs):
-        bh = int(h * fr)
-        bx = x + i * tw + 2
-        draw.rectangle([bx, base - bh, bx + tw - 4, base], fill=(60, 90, 128))
-        for wy in range(base - bh + 6, base - 4, 10):
-            draw.rectangle([bx + 4, wy, bx + tw - 8, wy + 3],
-                           fill=(190, 214, 238))
+    for idx, frac in enumerate(heights):
+        bh = int(h * frac)
+        bx = x + idx * tw + 2
+        d.rectangle([bx, bottom - bh, bx + tw - 4, bottom],
+                    fill=(60, 90, 128))
+        wy = bottom - bh + 6
+        while wy < bottom - 4:
+            d.rectangle([bx + 4, wy, bx + tw - 8, wy + 3],
+                        fill=(190, 214, 238))
+            wy += 10
 
 
-def scene_gulf(draw, x, y, w, h):
-    """Night sky over the Gulf: drone streaks and a naval base silhouette."""
-    draw.rectangle([x, y, x + w, y + h], fill=(10, 16, 40))
+def art_gulf(d, x, y, w, h):
+    """Night over the Gulf: stars, moon, drone streaks, base silhouette."""
+    d.rectangle([x, y, x + w, y + h], fill=(10, 16, 40))
     rng = random.Random(18112026)
     for _ in range(60):
         sx = x + rng.randint(4, w - 4)
         sy = y + rng.randint(4, h - 4)
-        draw.ellipse([sx - 1, sy - 1, sx + 1, sy + 1], fill=(255, 255, 255))
-    # moon
-    draw.ellipse([x + w - 70, y + 12, x + w - 30, y + 52],
-                 fill=(235, 230, 200))
-    # drone streaks crossing the sky
+        d.ellipse([sx - 1, sy - 1, sx + 1, sy + 1], fill=(255, 255, 255))
+    d.ellipse([x + w - 70, y + 12, x + w - 30, y + 52],
+              fill=(235, 230, 200))
     for i in range(4):
         sy = y + 22 + i * 16
-        draw.line([(x + 16 + i * 30, sy), (x + 16 + i * 30 + 90, sy + 26)],
-                  fill=(255, 140, 60), width=3)
-        draw.ellipse([x + 16 + i * 30 + 88, sy + 24,
-                      x + 16 + i * 30 + 94, sy + 30], fill=(255, 190, 90))
-    # sea and base silhouette
-    base = y + h
-    draw.rectangle([x, base - 30, x + w, base], fill=(18, 70, 105))
-    for bx, bw, bh in [(10, 46, 34), (66, 30, 48), (106, 54, 30),
-                       (170, 26, 42), (206, 48, 36)]:
-        draw.rectangle([x + bx, base - 30 - bh, x + bx + bw, base - 30],
-                       fill=(8, 12, 28))
-        draw.rectangle([x + bx + 4, base - 30 - bh - 10, x + bx + 8,
-                        base - 30 - bh], fill=(8, 12, 28))
+        sx = x + 16 + i * 30
+        d.line([(sx, sy), (sx + 90, sy + 26)], fill=(255, 140, 60), width=3)
+        d.ellipse([sx + 88, sy + 24, sx + 94, sy + 30], fill=(255, 190, 90))
+    bottom = y + h
+    d.rectangle([x, bottom - 30, x + w, bottom], fill=(18, 70, 105))
+    blocks = [(10, 46, 34), (66, 30, 48), (106, 54, 30), (170, 26, 42),
+              (206, 48, 36)]
+    for bx, bw, bh in blocks:
+        d.rectangle([x + bx, bottom - 30 - bh, x + bx + bw, bottom - 30],
+                    fill=(8, 12, 28))
+        d.rectangle([x + bx + 4, bottom - 30 - bh - 10, x + bx + 8,
+                     bottom - 30 - bh], fill=(8, 12, 28))
 
 
-def scene_bridge(draw, x, y, w, h):
-    """A long bridge over grey water, one span broken and smoking."""
-    draw.rectangle([x, y, x + w, y + h], fill=(196, 208, 220))
-    # sea
-    draw.rectangle([x, y + int(h * 0.62), x + w, y + h], fill=(90, 125, 155))
+def art_bridge(d, x, y, w, h):
+    """A bridge over grey water with one span broken and smoking."""
+    d.rectangle([x, y, x + w, y + h], fill=(196, 208, 220))
+    d.rectangle([x, y + int(h * 0.62), x + w, y + h], fill=(90, 125, 155))
     for i in range(5):
         wy = y + int(h * 0.68) + i * 12
-        draw.line([(x + 8, wy), (x + w - 8, wy)], fill=(150, 180, 205),
-                  width=2)
-    # bridge deck with a gap in the middle
-    deck_y = y + int(h * 0.52)
-    draw.rectangle([x, deck_y, x + w // 2 - 34, deck_y + 8], fill=(70, 70, 78))
-    draw.rectangle([x + w // 2 + 34, deck_y, x + w, deck_y + 8],
-                   fill=(70, 70, 78))
-    # fallen span tilted into the water
-    draw.polygon([(x + w // 2 - 34, deck_y),
-                  (x + w // 2 + 10, deck_y + 44),
-                  (x + w // 2 + 34, deck_y + 40),
-                  (x + w // 2 - 8, deck_y + 2)], fill=(50, 50, 58))
-    # pillars
+        d.line([(x + 8, wy), (x + w - 8, wy)], fill=(150, 180, 205), width=2)
+    deck = y + int(h * 0.52)
+    d.rectangle([x, deck, x + w // 2 - 34, deck + 8], fill=(70, 70, 78))
+    d.rectangle([x + w // 2 + 34, deck, x + w, deck + 8], fill=(70, 70, 78))
+    d.polygon([(x + w // 2 - 34, deck),
+               (x + w // 2 + 10, deck + 44),
+               (x + w // 2 + 34, deck + 40),
+               (x + w // 2 - 8, deck + 2)], fill=(50, 50, 58))
     for px in (x + 60, x + w - 80):
-        draw.rectangle([px, deck_y + 8, px + 14, y + h - 8], fill=(90, 90, 98))
-    # smoke from the gap
-    for i, (sx, sy, r) in enumerate([(0, -6, 10), (12, -22, 13), (-8, -36, 16),
-                                     (6, -52, 18)]):
-        cx = x + w // 2 + sx
-        cy = deck_y + sy
-        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(120, 120, 128))
+        d.rectangle([px, deck + 8, px + 14, y + h - 8], fill=(90, 90, 98))
+    puffs = [(0, -6, 10), (12, -22, 13), (-8, -36, 16), (6, -52, 18)]
+    for dx, dy, r in puffs:
+        cx = x + w // 2 + dx
+        cy = deck + dy
+        d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(120, 120, 128))
 
 
-def scene_senate(draw, x, y, w, h):
-    """A ballot box with a rising bar chart: 56 to 44."""
-    draw.rectangle([x, y, x + w, y + h], fill=(226, 232, 240))
-    # two bars
-    base = y + h - 26
+def art_senate(d, x, y, w, h):
+    """Ballot box and a 56-to-44 bar chart."""
+    d.rectangle([x, y, x + w, y + h], fill=(226, 232, 240))
+    bottom = y + h - 26
     bw = 52
-    bx1 = x + 44
-    bx2 = x + w - 44 - bw
-    h1 = int((h - 60) * 0.56)
-    h2 = int((h - 60) * 0.44)
-    draw.rectangle([bx1, base - h1, bx1 + bw, base], fill=(30, 80, 160))
-    draw.rectangle([bx2, base - h2, bx2 + bw, base], fill=(178, 34, 34))
-    f = font(SANS_BOLD, 22)
-    d1 = "56"
-    d2 = "44"
-    draw.text((bx1 + bw // 2 - draw.textlength(d1, font=f) // 2, base - h1 - 30),
-              d1, font=f, fill=(30, 80, 160))
-    draw.text((bx2 + bw // 2 - draw.textlength(d2, font=f) // 2, base - h2 - 30),
-              d2, font=f, fill=(178, 34, 34))
-    # ballot slot
-    draw.rectangle([x + w // 2 - 26, y + 12, x + w // 2 + 26, y + 22],
-                   fill=(40, 40, 40))
-    f2 = font(SANS_BOLD, 13)
+    left_x = x + 44
+    right_x = x + w - 44 - bw
+    h_left = int((h - 60) * 0.56)
+    h_right = int((h - 60) * 0.44)
+    d.rectangle([left_x, bottom - h_left, left_x + bw, bottom],
+                fill=(30, 80, 160))
+    d.rectangle([right_x, bottom - h_right, right_x + bw, bottom], fill=RED)
+    f = tf(SANS_B, 22)
+    for bx, bh, txt, col in ((left_x, h_left, "56", (30, 80, 160)),
+                             (right_x, h_right, "44", RED)):
+        tw = d.textlength(txt, font=f)
+        d.text((bx + bw // 2 - tw // 2, bottom - bh - 30), txt, font=f,
+               fill=col)
+    d.rectangle([x + w // 2 - 26, y + 12, x + w // 2 + 26, y + 22],
+                fill=(40, 40, 40))
+    f2 = tf(SANS_B, 13)
     label = "ALASKA DECIDES"
-    draw.text((x + w // 2 - draw.textlength(label, font=f2) // 2, y + 28),
-              label, font=f2, fill=(40, 40, 40))
+    d.text((x + w // 2 - d.textlength(label, font=f2) // 2, y + 28), label,
+           font=f2, fill=(40, 40, 40))
 
 
-def scene_ipo(draw, x, y, w, h):
-    """A rising stock chart breaking through a ceiling line."""
-    draw.rectangle([x, y, x + w, y + h], fill=(240, 244, 238))
-    # grid
+def art_ipo(d, x, y, w, h):
+    """A stock line climbing through its expected-range ceiling."""
+    d.rectangle([x, y, x + w, y + h], fill=(240, 244, 238))
     for i in range(1, 4):
         gy = y + i * h // 4
-        draw.line([(x + 8, gy), (x + w - 8, gy)], fill=(210, 220, 208),
-                  width=1)
-    # ceiling line (expected range top)
-    cy = y + int(h * 0.34)
-    draw.line([(x + 8, cy), (x + w - 8, cy)], fill=(178, 34, 34), width=2)
-    f = font(SANS_BOLD, 13)
-    draw.text((x + 10, cy - 20), "EXPECTED RANGE", font=f, fill=(178, 34, 34))
-    # rising line
+        d.line([(x + 8, gy), (x + w - 8, gy)], fill=(210, 220, 208), width=1)
+    ceil = y + int(h * 0.34)
+    d.line([(x + 8, ceil), (x + w - 8, ceil)], fill=RED, width=2)
+    f = tf(SANS_B, 13)
+    d.text((x + 10, ceil - 20), "EXPECTED RANGE", font=f, fill=RED)
     pts = [(x + 12, y + h - 24), (x + w * 0.25, y + h * 0.62),
            (x + w * 0.45, y + h * 0.55), (x + w * 0.62, y + h * 0.42),
            (x + w * 0.80, y + h * 0.26), (x + w - 14, y + 14)]
-    draw.line(pts, fill=(30, 110, 60), width=4, joint="curve")
+    d.line(pts, fill=(30, 110, 60), width=4, joint="curve")
     for px, py in pts:
-        draw.ellipse([px - 4, py - 4, px + 4, py + 4], fill=(30, 110, 60))
-    f2 = font(SERIF, 34)
-    draw.text((x + 14, y + h - 52), "$83", font=f2, fill=(20, 20, 20))
+        d.ellipse([px - 4, py - 4, px + 4, py + 4], fill=(30, 110, 60))
+    d.text((x + 14, y + h - 52), "$83", font=tf(SERIF_B, 34), fill=INK)
 
 
-def scene_quad(draw, x, y, w, h):
-    """Four flags around a table in Manila."""
-    draw.rectangle([x, y, x + w, y + h], fill=(238, 232, 220))
-    # table
-    ty = y + int(h * 0.58)
-    draw.ellipse([x + 16, ty, x + w - 16, ty + 44], fill=(120, 80, 50))
-    draw.rectangle([x + 16, ty + 22, x + w - 16, ty + 44], fill=(96, 62, 38))
-    # four chairs / flags behind the table
-    cols = [(30, 60, 120), (178, 34, 34), (30, 110, 60), (200, 140, 30)]
-    for i, col in enumerate(cols):
+def art_quad(d, x, y, w, h):
+    """Four flags behind a table in Manila."""
+    d.rectangle([x, y, x + w, y + h], fill=(238, 232, 220))
+    top = y + int(h * 0.58)
+    d.ellipse([x + 16, top, x + w - 16, top + 44], fill=(120, 80, 50))
+    d.rectangle([x + 16, top + 22, x + w - 16, top + 44], fill=(96, 62, 38))
+    colours = [(30, 60, 120), RED, (30, 110, 60), (200, 140, 30)]
+    for i, col in enumerate(colours):
         cx = x + 30 + i * (w - 60) // 3
-        draw.rectangle([cx - 3, y + 14, cx + 3, ty + 6], fill=(60, 50, 40),
-                       width=1)
-        draw.rectangle([cx + 4, y + 14, cx + 34, y + 40], fill=col,
-                       outline=(40, 40, 40), width=1)
-        draw.ellipse([cx - 10, ty - 14, cx + 10, ty + 6], fill=(220, 200, 170),
-                     outline=(120, 100, 80), width=1)
-    f = font(SANS_BOLD, 13)
-    label = "MANILA"
-    draw.text((x + w // 2 - draw.textlength(label, font=f) // 2, y + 4),
-              label, font=f, fill=(90, 70, 50))
+        d.rectangle([cx - 3, y + 14, cx + 3, top + 6], fill=(60, 50, 40))
+        d.rectangle([cx + 4, y + 14, cx + 34, y + 40], fill=col,
+                    outline=(40, 40, 40), width=1)
+        d.ellipse([cx - 10, top - 14, cx + 10, top + 6],
+                  fill=(220, 200, 170), outline=(120, 100, 80), width=1)
 
 
 # ---------------------------------------------------------------- page
-def build():
-    img = Image.new("RGB", (W, H), (250, 246, 236))
+def render():
+    img = Image.new("RGB", (SIZE, SIZE), PAPER)
     d = ImageDraw.Draw(img)
 
-    # ---- masthead
-    d.rectangle([0, 0, W, 118], fill=(20, 33, 61))
-    d.rectangle([0, 118, W, 122], fill=(200, 162, 60))
-    f_title = font(SERIF, 46)
-    d.text((MARGIN, 14), "THE WORLD IN ONE PICTURE", font=f_title,
+    # masthead
+    d.rectangle([0, 0, SIZE, 118], fill=NAVY)
+    d.rectangle([0, 118, SIZE, 122], fill=GOLD)
+    d.text((PAD, 14), "THE WORLD IN ONE PICTURE", font=tf(SERIF_B, 46),
            fill=(255, 255, 255))
-    f_sub = font(SANS_BOLD, 17)
-    d.text((MARGIN, 86),
+    d.text((PAD, 86),
            "WEDNESDAY 18 NOVEMBER 2026  •  THE DAY'S NEWS IN ONE PAGE",
-           font=f_sub, fill=(200, 162, 60))
+           font=tf(SANS_B, 17), fill=GOLD)
 
-    # ---- lead story: Xi-Putin in Shenzhen
-    lx, ly, lw, lh = MARGIN, 136, CONTENT_W, 322
-    panel(d, lx, ly, lw, lh)
-    scene_shenzhen(d, lx + 2, ly + 2, 560, lh - 4)
+    # lead story: Xi meets Putin in Shenzhen
+    lx, ly, lw, lh = PAD, 136, INNER, 322
+    frame(d, lx, ly, lw, lh)
+    art_summit(d, lx + 2, ly + 2, 560, lh - 4)
     tx = lx + 578
-    y = kicker(d, tx, ly + 14, "DIPLOMACY  •  SHENZHEN")
-    y = headline(d, tx, y, "XI MEETS PUTIN ON THE EVE OF THE BIG THREE SUMMIT",
-                 30, lw - 594)
-    body(d, tx, y + 8,
+    yy = tag(d, tx, ly + 14, "DIPLOMACY  •  SHENZHEN")
+    yy = head(d, tx, yy, "XI MEETS PUTIN ON THE EVE OF THE BIG THREE SUMMIT",
+              30, lw - 594)
+    para(d, tx, yy + 8,
          "Xi Jinping and Vladimir Putin open talks in Shenzhen, one "
          "day before their trilateral summit with Donald Trump. Xi "
          "pledges to stand against trade protectionism; Putin attacks "
          "Western sanctions.", 16, lw - 594)
 
-    # ---- row 2: Gulf drones + Crimean Bridge
+    # second row: Gulf drones and the Crimean Bridge
     ry, rh = 472, 218
-    pw = (CONTENT_W - 16) // 2
-    # Gulf
-    px = MARGIN
-    panel(d, px, ry, pw, rh)
-    scene_gulf(d, px + 2, ry + 2, pw - 4, 92)
-    y = kicker(d, px + 16, ry + 106, "WAR  •  THE GULF")
-    y = headline(d, px + 16, y, "IRAN'S DRONES HIT US BASES IN KUWAIT AND BAHRAIN",
-                 21, pw - 32)
-    body(d, px + 16, y + 4,
+    pw = (INNER - 16) // 2
+    px = PAD
+    frame(d, px, ry, pw, rh)
+    art_gulf(d, px + 2, ry + 2, pw - 4, 92)
+    yy = tag(d, px + 16, ry + 106, "WAR  •  THE GULF")
+    yy = head(d, px + 16, yy,
+              "IRAN'S DRONES HIT US BASES IN KUWAIT AND BAHRAIN", 21, pw - 32)
+    para(d, px + 16, yy + 4,
          "Tehran says it struck Ali Al Salem air base after US jets "
          "hit Qeshm Island. Bahrain intercepts several attacks.", 14,
          pw - 32)
-    # Bridge
-    px = MARGIN + pw + 16
-    panel(d, px, ry, pw, rh)
-    scene_bridge(d, px + 2, ry + 2, pw - 4, 92)
-    y = kicker(d, px + 16, ry + 106, "WAR  •  UKRAINE")
-    y = headline(d, px + 16, y, "CRIMEAN BRIDGE PARTLY DOWN AFTER UKRAINE STRIKE",
-                 21, pw - 32)
-    body(d, px + 16, y + 4,
+    px = PAD + pw + 16
+    frame(d, px, ry, pw, rh)
+    art_bridge(d, px + 2, ry + 2, pw - 4, 92)
+    yy = tag(d, px + 16, ry + 106, "WAR  •  UKRAINE")
+    yy = head(d, px + 16, yy,
+              "CRIMEAN BRIDGE PARTLY DOWN AFTER UKRAINE STRIKE", 21, pw - 32)
+    para(d, px + 16, yy + 4,
          "A span of the bridge collapses under a Ukrainian attack "
          "as fighting grinds on. The EU proposes a €45bn loan for "
          "Kyiv.", 14, pw - 32)
 
-    # ---- row 3: Alaska Senate + Anthropic IPO
+    # third row: Alaska Senate and the Anthropic IPO
     ry, rh = 704, 180
-    px = MARGIN
-    panel(d, px, ry, pw, rh)
-    scene_senate(d, px + 2, ry + 2, pw - 4, 70)
-    y = kicker(d, px + 16, ry + 82, "POLITICS  •  USA")
-    y = headline(d, px + 16, y, "PELTOLA TAKES ALASKA; DEMOCRATS HOLD 56-44 SENATE",
-                 19, pw - 32)
-    body(d, px + 16, y + 4,
+    px = PAD
+    frame(d, px, ry, pw, rh)
+    art_senate(d, px + 2, ry + 2, pw - 4, 70)
+    yy = tag(d, px + 16, ry + 82, "POLITICS  •  USA")
+    yy = head(d, px + 16, yy,
+              "PELTOLA TAKES ALASKA; DEMOCRATS HOLD 56-44 SENATE", 19,
+              pw - 32)
+    para(d, px + 16, yy + 4,
          "Democrat Mary Peltola unseats Dan Sullivan in the final "
          "Senate race, sealing a 56-44 Democratic majority.", 13,
          pw - 32)
-    px = MARGIN + pw + 16
-    panel(d, px, ry, pw, rh)
-    scene_ipo(d, px + 2, ry + 2, pw - 4, 70)
-    y = kicker(d, px + 16, ry + 82, "BUSINESS  •  AI")
-    y = headline(d, px + 16, y, "ANTHROPIC PRICES ITS IPO AT $83 A SHARE",
-                 19, pw - 32)
-    body(d, px + 16, y + 4,
+    px = PAD + pw + 16
+    frame(d, px, ry, pw, rh)
+    art_ipo(d, px + 2, ry + 2, pw - 4, 70)
+    yy = tag(d, px + 16, ry + 82, "BUSINESS  •  AI")
+    yy = head(d, px + 16, yy, "ANTHROPIC PRICES ITS IPO AT $83 A SHARE",
+              19, pw - 32)
+    para(d, px + 16, yy + 4,
          "The AI firm prices above its expected range in one of the "
          "year's biggest tech listings.", 13, pw - 32)
 
-    # ---- bottom row: Quad panel + "also today" briefs
+    # bottom row: Quad panel and the briefs column
     ry, rh = 898, 102
-    bw = (CONTENT_W - 16) // 2
-    # Quad
-    px = MARGIN
-    panel(d, px, ry, bw, rh)
-    scene_quad(d, px + 2, ry + 2, 168, rh - 4)
+    bw = (INNER - 16) // 2
+    px = PAD
+    frame(d, px, ry, bw, rh)
+    art_quad(d, px + 2, ry + 2, 168, rh - 4)
     tx = px + 186
-    y = kicker(d, tx, ry + 10, "DIPLOMACY  •  MANILA")
-    y = headline(d, tx, y, "QUAD MEETS AT LEADER LEVEL AGAIN",
-                 15, bw - 202)
-    body(d, tx, y + 3,
+    yy = tag(d, tx, ry + 10, "DIPLOMACY  •  MANILA")
+    yy = head(d, tx, yy, "QUAD MEETS AT LEADER LEVEL AGAIN", 15, bw - 202)
+    para(d, tx, yy + 3,
          "Trump announces a trade deal with the Philippines.",
          12, bw - 202)
-    # briefs
-    px = MARGIN + bw + 16
-    panel(d, px, ry, bw, rh)
-    y = kicker(d, px + 16, ry + 10, "ALSO TODAY")
+    px = PAD + bw + 16
+    frame(d, px, ry, bw, rh)
+    yy = tag(d, px + 16, ry + 10, "ALSO TODAY")
     briefs = [
         "EU proposes a €45bn loan for Ukraine.",
         "US loses its measles-free status after 26 years.",
         "Cold kills in Gaza's displaced camps.",
         "Russian military plane crashes in Siberia: 19 dead.",
     ]
-    f_brief = font(SANS, 13)
-    for b in briefs:
-        d.text((px + 16, y), "•  " + b, font=f_brief, fill=(40, 40, 40))
-        y += 18
+    f_brief = tf(SANS_R, 13)
+    for item in briefs:
+        d.text((px + 16, yy), "•  " + item, font=f_brief, fill=GREY)
+        yy += 18
 
     return img
 
 
 if __name__ == "__main__":
     here = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(here, "entry.png")
-    build().save(out, format="PNG", optimize=True)
-    print("wrote", out, os.path.getsize(out), "bytes")
+    target = os.path.join(here, "entry.png")
+    render().save(target, format="PNG", optimize=True)
+    print("wrote", target, os.path.getsize(target), "bytes")

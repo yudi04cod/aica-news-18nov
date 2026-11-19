@@ -1,32 +1,33 @@
-"""Entry point for the news-image-20261118 competition.
+"""Run the news-image-20261118 entry.
 
-The front page image (entry.png) is drawn by draw.py with PIL and ships
-in this repository. This program only copies it to the output directory
-as entry.png, so it needs nothing but the Python standard library, uses
-no network, and writes byte-identical output on every run.
+The front page (entry.png) is drawn by draw.py and shipped in this
+repository. All this program does is place a copy of it where the
+grader expects it, as entry.png. It needs nothing beyond the Python
+standard library, touches no network, and its output is identical on
+every run because the source file never changes.
 """
 
-import os
+import shutil
+from pathlib import Path
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = Path(__file__).resolve().parent
+IMAGE_NAME = "entry.png"
 
 
-def main():
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
-    os.makedirs(out_dir, exist_ok=True)
+def copy_entry() -> Path:
+    """Copy the shipped front page into the output directory."""
+    import os
 
-    src = os.path.join(HERE, "entry.png")
-    dst = os.path.join(out_dir, "entry.png")
-    if not os.path.isfile(src):
-        raise FileNotFoundError("entry.png is missing next to main.py")
-
-    with open(src, "rb") as fin, open(dst, "wb") as fout:
-        while True:
-            chunk = fin.read(65536)
-            if not chunk:
-                break
-            fout.write(chunk)
+    out_dir = Path(os.environ.get("MAKEFUN_OUTPUT_DIR", "/output"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    source = ROOT / IMAGE_NAME
+    if not source.is_file():
+        raise FileNotFoundError(f"{IMAGE_NAME} is missing next to main.py")
+    destination = out_dir / IMAGE_NAME
+    shutil.copyfile(source, destination)
+    return destination
 
 
 if __name__ == "__main__":
-    main()
+    written = copy_entry()
+    print("wrote", written)
